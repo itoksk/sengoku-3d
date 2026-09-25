@@ -71,6 +71,12 @@ button:focus-visible{outline:2px solid var(--kin);outline-offset:2px}
 #dots button.on{background:var(--kin);color:#fff}
 #dots button.done{color:var(--ink)}
 .note{font-size:11px;color:var(--sub);margin-top:8px}
+.fold{display:grid;grid-template-rows:1fr;transition:grid-template-rows .32s cubic-bezier(.2,.7,.2,1)}
+.fold>div{overflow:hidden;min-height:0}
+.card.min .fold{grid-template-rows:0fr}
+.card.min h2{margin-bottom:0}
+#fold{margin-left:auto;align-self:center;white-space:nowrap;height:28px;font-size:12px;color:var(--sub)}
+@media (prefers-reduced-motion: reduce){.fold{transition:none}}
 #loading{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;
   background:#cdd5d6;font-family:"Shippori Mincho",serif;font-size:18px;color:#1c2026;letter-spacing:.2em;transition:opacity .8s}
 @media (max-width:640px){
@@ -95,13 +101,13 @@ button:focus-visible{outline:2px solid var(--kin);outline-offset:2px}
       <div class="row"><span class="sw ai"></span>徳川軍</div>
       <div class="row"><span class="sw shu"></span>武田軍</div>
       <div class="row"><span class="sw arr"></span>進軍・攻撃の方向</div>
-      <div class="hint">ドラッグで視点を回転<br>ホイール・ピンチで拡大縮小<br>ダブルクリックで視点を戻す<br>Space で再生／停止</div>
+      <div class="hint">ドラッグで視点を回転<br>ホイール・ピンチで拡大縮小<br>ダブルクリックで視点を戻す<br>Space で再生／停止<br>H で説明の表示／非表示</div>
     </div>
   </div>
   <div class="panel card">
-    <div class="meta"><span class="act" id="pact"></span><span id="pdate"></span></div>
+    <div class="meta"><span class="act" id="pact"></span><span id="pdate"></span><button id="fold" aria-expanded="true" aria-controls="pbody">説明を隠す</button></div>
     <h2 id="ptitle"></h2>
-    <p id="ptext"></p>
+    <div class="fold" id="pbody"><div><p id="ptext"></p></div></div>
     <div class="bar"><div id="prog"></div></div>
     <div class="ctrl">
       <button id="prev" aria-label="前の場面">◀</button>
@@ -110,7 +116,7 @@ button:focus-visible{outline:2px solid var(--kin);outline-offset:2px}
       <div id="dots"></div>
       <button id="speed" aria-label="再生速度">1×</button>
     </div>
-    <div class="note">地形の縮尺・軍勢の数と配置は、流れを理解するための概念的な再現です。</div>
+    <div class="fold"><div><div class="note">地形の縮尺・軍勢の数と配置は、流れを理解するための概念的な再現です。</div></div></div>
   </div>
 </div>
 <div id="loading">地形を生成しています</div>
@@ -561,6 +567,7 @@ $('play').onclick=()=>{if(!playing&&cur===PH.length-1&&tIn>=DUR){go(0);return;}s
 $('speed').onclick=()=>{speed=speed===1?2:speed===2?0.5:1;$('speed').textContent=(speed===0.5?'0.5':speed)+'×';};
 addEventListener('keydown',e=>{
   if(e.code==='Space'){e.preventDefault();$('play').click();}
+  else if(e.code==='KeyH')foldBtn.click();
   else if(e.code==='ArrowRight')go(cur+1);else if(e.code==='ArrowLeft')go(cur-1);
 });
 
@@ -577,8 +584,27 @@ canvas.addEventListener('pointerup',up);canvas.addEventListener('pointercancel',
 canvas.addEventListener('wheel',e=>{e.preventDefault();tZoom=clamp(tZoom*Math.exp(e.deltaY*0.001),0.35,2.4);},{passive:false});
 canvas.addEventListener('dblclick',()=>{tYaw=0;tPitch=0;tZoom=1;});
 
-function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;
-  camera.fov=w<h?58:42;camera.updateProjectionMatrix();}
+// 説明の折りたたみ（本文を畳んで裏の俯瞰を見せる）
+const card=document.querySelector('.card'),foldBtn=$('fold');
+function setFold(min){card.classList.toggle('min',min);foldBtn.textContent=min?'説明を表示':'説明を隠す';
+  foldBtn.setAttribute('aria-expanded',String(!min));try{localStorage.setItem('sg3d-fold',min?'1':'0');}catch(e){}}
+foldBtn.onclick=()=>setFold(!card.classList.contains('min'));
+try{if(localStorage.getItem('sg3d-fold')==='1')setFold(true);}catch(e){}
+
+// 注視点を「上部パネルと説明カードの間の見えている帯」の中央に映す
+let viewShift=0,viewShiftT=0,baseFov=42;
+function measureView(){const h=innerHeight,top=document.querySelector('.top');
+  let tb=0;for(const el of top.children){const r=el.getBoundingClientRect();if(r.height>0)tb=Math.max(tb,r.bottom);}
+  const cb=card.getBoundingClientRect().top;
+  viewShiftT=clamp(h/2-(tb+cb)/2,0,h*0.3);}
+function applyView(){const w=innerWidth,h=innerHeight,s=viewShift,fh=h+2*s;
+  camera.aspect=w/fh;camera.fov=2*Math.atan(Math.tan(baseFov*Math.PI/360)*fh/h)*180/Math.PI;
+  camera.setViewOffset(w,fh,0,2*s,w,h);}
+new ResizeObserver(measureView).observe(card);
+
+
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);
+  baseFov=w<h?58:42;measureView();viewShift=viewShiftT;applyView();}
 addEventListener('resize',resize);resize();
 
 go(0);
@@ -614,6 +640,7 @@ function frame(now){
   sun.target.position.set(T[0],0,T[2]);sun.position.set(T[0]-90,140,T[2]+70);
 
   $('prog').style.width=(clamp(tIn/DUR,0,1)*100)+'%';
+  if(Math.abs(viewShiftT-viewShift)>0.5){viewShift+=(viewShiftT-viewShift)*Math.min(1,dt*(reduceMotion?60:8));applyView();}
   renderer.render(scene,camera);
   requestAnimationFrame(frame);
 }
