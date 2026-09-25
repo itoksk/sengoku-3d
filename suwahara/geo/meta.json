@@ -1,0 +1,15 @@
+{
+ "name": "suwahara",
+ "origin": {
+  "lat": 34.8155,
+  "lon": 138.123
+ },
+ "size_m": 9000,
+ "N": 301,
+ "m_per_unit": 30.0,
+ "size_units": 300.0,
+ "height": "v/10-100 [m]",
+ "hmin": 28.747615098481447,
+ "hmax": 405.1388050409221,
+ "attribution": "地形: 国土地理院 標高タイル（基盤地図情報 数値標高モデル）／水系・街道: © OpenStreetMap contributors"
+}
